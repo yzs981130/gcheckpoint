@@ -18,6 +18,8 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
 
+import gcheckpoint
+
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(models.__dict__[name]))
@@ -87,6 +89,8 @@ first_epoch_time = 0
 total_checkpoint = 0
 total_checkpoint_time = 0
 first_epoch_time = 0
+
+saved_checkpoint = None
 
 def main():
     last_time = time.perf_counter()
@@ -262,6 +266,10 @@ def main_worker(gpu, ngpus_per_node, args, last_time = None):
         validate(val_loader, model, criterion, args)
         return
 
+    global saved_checkpoint
+    killer = gcheckpoint.GracefulKiller(save_checkpoint, saved_checkpoint, 0)
+
+
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
@@ -269,6 +277,14 @@ def main_worker(gpu, ngpus_per_node, args, last_time = None):
 
         # train for one epoch
         train(train_loader, model, criterion, optimizer, epoch, args, last_time)
+
+        saved_checkpoint = {
+                'epoch': epoch + 1,
+                'arch': args.arch,
+                'state_dict': model.state_dict(),
+                'best_acc1': best_acc1,
+                'optimizer' : optimizer.state_dict(),
+            }
 
         # evaluate on validation set
         # acc1 = validate(val_loader, model, criterion, args)
@@ -427,6 +443,7 @@ def validate(val_loader, model, criterion, args):
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+    print('save_checkpoint')
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, 'model_best.pth.tar')

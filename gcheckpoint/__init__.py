@@ -15,4 +15,4 @@ class GracefulKiller:
     def exit_gracefully(self, signum, frame):
         self.kill_now = True
         if self.callback_function is not None:
-            self.callback_function(self.args)
+            self.callback_function(*self.args)
