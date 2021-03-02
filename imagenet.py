@@ -90,7 +90,16 @@ total_checkpoint = 0
 total_checkpoint_time = 0
 first_epoch_time = 0
 
-saved_checkpoint = None
+
+def term_checkpoint(state, is_term, filename='checkpoint-autosave.pth.tar'):
+    print('term_checkpoint')
+    torch.save(state, filename)
+    if is_term:
+        exit(0)
+
+
+killer = gcheckpoint.GracefulKiller(term_checkpoint)
+
 
 def main():
     last_time = time.perf_counter()
@@ -266,10 +275,6 @@ def main_worker(gpu, ngpus_per_node, args, last_time = None):
         validate(val_loader, model, criterion, args)
         return
 
-    global saved_checkpoint
-    killer = gcheckpoint.GracefulKiller(save_checkpoint, saved_checkpoint, 0)
-
-
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
@@ -277,14 +282,6 @@ def main_worker(gpu, ngpus_per_node, args, last_time = None):
 
         # train for one epoch
         train(train_loader, model, criterion, optimizer, epoch, args, last_time)
-
-        saved_checkpoint = {
-                'epoch': epoch + 1,
-                'arch': args.arch,
-                'state_dict': model.state_dict(),
-                'best_acc1': best_acc1,
-                'optimizer' : optimizer.state_dict(),
-            }
 
         # evaluate on validation set
         # acc1 = validate(val_loader, model, criterion, args)
@@ -395,6 +392,15 @@ def train(train_loader, model, criterion, optimizer, epoch, args, last_time):
             first_iter_time = cur_time_duration
         else:
             total_iter_time += cur_time_duration
+
+        saved_checkpoint = {
+            'epoch': epoch + 1,
+            'arch': args.arch,
+            'state_dict': model.state_dict(),
+            'best_acc1': best_acc1,
+            'optimizer': optimizer.state_dict(),
+        }
+        killer.check_exit(saved_checkpoint, 1)
 
 
 def validate(val_loader, model, criterion, args):
