@@ -1,5 +1,6 @@
 import signal
 import traceback
+import torch.distributed
 
 
 class GracefulKiller:
@@ -21,6 +22,7 @@ class GracefulKiller:
         traceback.print_stack(frame)
         '''
     def check_exit(self, *args):
-        if self.kill_now:
+        is_main = not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0
+        if self.kill_now and is_main:
             print('kill now')
             self.callback_function(*args)
